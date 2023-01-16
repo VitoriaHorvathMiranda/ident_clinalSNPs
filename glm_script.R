@@ -1,13 +1,19 @@
 library(argparse)
 library(tidyverse)
 library(data.table)
+library(qvalue)
 
 #parse arguments
 parser <- ArgumentParser(description= "computes a glm for each snp")
 parser$add_argument('--timePops', '-tPops',
                     help = 'outputs from join_time_pops_script.R')
 parser$add_argument('--output', '-o',
-                    help = 'table with glm, coefficient and p-value')
+                    help = 'table with significant snps for a FDR of 0.1, .tsv')
+parser$add_argument('--histPlot', '-hp',
+                    help = 'p-value histogram output, .png')
+parser$add_argument('--qPlot', '-qp',
+                    help = 'p-plot output, .png')
+
 xargs<- parser$parse_args()
 
 joined_pops <- xargs$timePops
@@ -39,6 +45,9 @@ nested_snps[, models := purrr::map(data, ~ glm(freq~latitude,
                                                data = .x,
                                                family = binomial()))]
 
+#drop data column 
+nested_snps <- nested_snps[, !c("data")]
+
 #gets lat coefficient
 nested_snps[, coefficients := purrr::map_dbl(models, ~coef(.x) %>% pluck("latitude")) ]
 
@@ -47,10 +56,29 @@ nested_snps[, p_value := purrr::map_dbl(models,
                                          ~summary(.x) %>% 
                                            pluck("coefficients") %>% pluck(8))]
 
-glm_table <- xargs$output
+#drops models column (it is too heavy)
+nested_snps <- nested_snps[, !c("models")]
 
-saveRDS(nested_snps, file = glm_table)
+#calculates the p-value cutoff for a 10% FDR
+#based on Storey 2003 paper
+p_values <- nested_snps$p_value
+qobj <- qvalue(p = p_values)
+p_value_cutoff <- max(qobj$pvalues[qobj$qvalues <= 0.1])
 
+#save important FDR plots
+hist <- hist(qobj)
+hist_plot <- xargs$histPlot
+ggsave(hist_plot)
 
+q_plots <- plot(qobj)
+q_plots_output <- xargs$qPlot
+ggsave(q_plots_output)
+
+#gets snps below that p-value
+significant_snps <- nested_snps[p_value <= p_value_cutoff,]
+
+#save table with significant snps
+output_path <- xargs$output
+fwrite(significant_snps, output_path, sep = "\t")
 
 
