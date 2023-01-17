@@ -9,7 +9,7 @@ library(qvalue)
 parser <- ArgumentParser(description= "computes a glm for each snp")
 parser$add_argument('--timePops', '-tPops',
                     help = 'outputs from join_time_pops_script.R')
-parser$add_argument('--minPOP', '-minpop',
+parser$add_argument('--minPOP', '-minpop', default=3,
                     help = 'Minimum number of populations in which a SNP
                     must be present to be considered')
 parser$add_argument('--output', '-o',

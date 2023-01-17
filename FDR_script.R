@@ -8,7 +8,7 @@ library(qvalue)
 parser <- ArgumentParser(description= "compute significative SNPs for a given FDR")
 parser$add_argument('--SNPs', '-snps',
                     help = 'outputs from glm_script.R')
-parser$add_argument('--FDR', '-q',
+parser$add_argument('--FDR', '-q', default=0.1,
                     help = 'false discovery rate, ex:0.1')
 parser$add_argument('--output', '-o',
                     help = 'table with significant snps for a given FDR, .tsv')
