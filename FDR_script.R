@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 library(argparse)
 library(data.table)
 library(qvalue)

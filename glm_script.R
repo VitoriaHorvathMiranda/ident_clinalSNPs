@@ -1,3 +1,5 @@
+#!/usr/bin/env Rscript
+
 library(argparse)
 library(tidyverse)
 library(data.table)
