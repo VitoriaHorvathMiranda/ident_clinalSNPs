@@ -62,17 +62,17 @@ O número de cromossomos amostrados em cada população estava na tabela de
 metadados. No final desse script tive a seguinte tabela para cada
 população:
 
-    ##        V1       V2     V3    V4                V5       V6         V7
-    ##  1: chrom position   freq depth                NE latitude population
-    ##  2:    2L     5037 0.9899     1 0.993788819875776    33.39      ESC97
-    ##  3:    2L     5357 0.1913     4  3.90243902439024    33.39      ESC97
-    ##  4:    2L     5372 0.5997     5  4.84848484848485    33.39      ESC97
-    ##  5:    2L     5390 0.4001     5  4.84848484848485    33.39      ESC97
-    ##  6:    2L     5403 0.1914     6  5.78313253012048    33.39      ESC97
-    ##  7:    2L     5762 0.5717     8  7.61904761904762    33.39      ESC97
-    ##  8:    2L     5867 0.1913     4  3.90243902439024    33.39      ESC97
-    ##  9:    2L     5889 0.2419     3  2.94478527607362    33.39      ESC97
-    ## 10:    2L     5892 0.2418     3  2.94478527607362    33.39      ESC97
+    ##     chrom position   freq depth        NE latitude population
+    ##  1:    2L     5037 0.9899     1 0.9937888    33.39      ESC97
+    ##  2:    2L     5357 0.1913     4 3.9024390    33.39      ESC97
+    ##  3:    2L     5372 0.5997     5 4.8484848    33.39      ESC97
+    ##  4:    2L     5390 0.4001     5 4.8484848    33.39      ESC97
+    ##  5:    2L     5403 0.1914     6 5.7831325    33.39      ESC97
+    ##  6:    2L     5762 0.5717     8 7.6190476    33.39      ESC97
+    ##  7:    2L     5867 0.1913     4 3.9024390    33.39      ESC97
+    ##  8:    2L     5889 0.2419     3 2.9447853    33.39      ESC97
+    ##  9:    2L     5892 0.2418     3 2.9447853    33.39      ESC97
+    ## 10:    2L     5904 0.2418     3 2.9447853    33.39      ESC97
 
 Em seguida usei o script
 [join\_time\_pops.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/join_time_pops_script.R)
@@ -89,8 +89,8 @@ snape-pooled tenha identificado snps com profundidade de leitura igual a
 zero, mas isso ocorreu porque quando calculei a profundidade com o
 `samtools depth` usei um filtro de qualidade de leitura e qualidade de
 mapeamento. Esse filtro considerou a profundidade como zero para todas
-as posições que não alcançavam o valor mínimo. Mesmo assim o
-snape-pooled conseguiu chamar esses SNPs, mas achei melhor filtrá-los.
+as posições que não alcançavam o valor mínimo de qualidade. Mesmo assim
+o snape-pooled conseguiu chamar esses SNPs, mas achei melhor filtrá-los.
 Também exclui os SNPs que foram chamados apenas em duas ou menos
 populações, e precisei aninhar cada SNP na tabela.
 
@@ -99,6 +99,18 @@ populações, e precisei aninhar cada SNP na tabela.
                                            n_pops>2,][,
                                            !c("n_pops"), with = FALSE]
 
+    ##     position2              data
+    ##  1:   2L:5317 <data.table[3x5]>
+    ##  2:   2L:5357 <data.table[3x5]>
+    ##  3:   2L:5372 <data.table[7x5]>
+    ##  4:   2L:5390 <data.table[7x5]>
+    ##  5:   2L:5403 <data.table[7x5]>
+    ##  6:   2L:5465 <data.table[6x5]>
+    ##  7:   2L:5598 <data.table[4x5]>
+    ##  8:   2L:5762 <data.table[7x5]>
+    ##  9:   2L:5867 <data.table[7x5]>
+    ## 10:   2L:5889 <data.table[7x5]>
+
 Corri o seguinte glm para cada SNP:
 
     #runs glm for each snp
@@ -106,6 +118,59 @@ Corri o seguinte glm para cada SNP:
                                                    weights = NE,
                                                    data = .x,
                                                    family = binomial()))]
+    head(nested_snps)
+
+    ##    position2              data    models
+    ## 1:   2L:5317 <data.table[3x5]> <glm[30]>
+    ## 2:   2L:5357 <data.table[3x5]> <glm[30]>
+    ## 3:   2L:5372 <data.table[7x5]> <glm[30]>
+    ## 4:   2L:5390 <data.table[7x5]> <glm[30]>
+    ## 5:   2L:5403 <data.table[7x5]> <glm[30]>
+    ## 6:   2L:5465 <data.table[6x5]> <glm[30]>
+
+olhando para um modelo:
+
+    pluck(nested_snps[[3]]) %>% pluck(1)
+
+    ## 
+    ## Call:  glm(formula = freq ~ latitude, family = binomial(), data = .x, 
+    ##     weights = NE)
+    ## 
+    ## Coefficients:
+    ## (Intercept)     latitude  
+    ##    -4.35989      0.04843  
+    ## 
+    ## Degrees of Freedom: 2 Total (i.e. Null);  1 Residual
+    ## Null Deviance:       0.731 
+    ## Residual Deviance: 0.02412   AIC: 13.21
+
+    nested_snps[, summary := purrr::map(models, 
+                                            ~summary(.x))]
+    pluck(nested_snps[[4]]) %>% pluck(1)
+
+    ## 
+    ## Call:
+    ## glm(formula = freq ~ latitude, family = binomial(), data = .x, 
+    ##     weights = NE)
+    ## 
+    ## Deviance Residuals: 
+    ##        1         2         3  
+    ##  0.02854  -0.11004   0.10583  
+    ## 
+    ## Coefficients:
+    ##             Estimate Std. Error z value Pr(>|z|)  
+    ## (Intercept) -4.35989    2.49140   -1.75   0.0801 .
+    ## latitude     0.04843    0.06133    0.79   0.4297  
+    ## ---
+    ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+    ## 
+    ## (Dispersion parameter for binomial family taken to be 1)
+    ## 
+    ##     Null deviance: 0.731028  on 2  degrees of freedom
+    ## Residual deviance: 0.024123  on 1  degrees of freedom
+    ## AIC: 13.212
+    ## 
+    ## Number of Fisher Scoring iterations: 4
 
 Então extrai o coeficiente de inclinação e o p-valor associado ao
 coeficiente de inclinação de cada glm:
@@ -117,6 +182,16 @@ coeficiente de inclinação de cada glm:
     nested_snps[, p_value := purrr::map_dbl(models, 
                                              ~summary(.x) %>% 
                                                pluck("coefficients") %>% pluck(8))]
+    head(nested_snps, n=3)
+
+    ##    position2              data    models           summary coefficients
+    ## 1:   2L:5317 <data.table[3x5]> <glm[30]> <summary.glm[17]>   0.04843086
+    ## 2:   2L:5357 <data.table[3x5]> <glm[30]> <summary.glm[17]>  -0.04014949
+    ## 3:   2L:5372 <data.table[7x5]> <glm[30]> <summary.glm[17]>  -0.01348586
+    ##      p_value
+    ## 1: 0.4297093
+    ## 2: 0.6503347
+    ## 3: 0.6314901
 
 Nesta última parte eu estou bastante insegura em relação ao p-valor que
 extraí, é esse mesmo? Toda essa última etapa foi feita no script

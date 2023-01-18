@@ -8,6 +8,7 @@ output: md_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(data.table)
+library(tidyverse)
 ```
 
 ## SNP Calling
@@ -62,7 +63,7 @@ O número de cromossomos amostrados em cada população estava na tabela de meta
 
 ```{r, echo=FALSE}
 NE_table <- fread(file = "/dados/time_clines/output/SNPs/09_L001.NE.tsv",
-                   sep = "\t", header = FALSE, nrows = 10)
+                   sep = "\t", nrows = 10)
 NE_table
 ```
 
@@ -71,7 +72,7 @@ Em seguida usei o script [join_time_pops.R](https://github.com/VitoriaHorvathMir
 ## Glm
 
 Para identificar os SNPs clinais era preciso correr um GLM para cada SNP de cada período. 
-Mas antes disso, filtrei os SNPs que tinham profundidade de leitura igual a zero. Pode parecer estranho que o snape-pooled tenha identificado snps com profundidade de leitura igual a zero, mas isso ocorreu porque quando calculei a profundidade com o `samtools depth` usei um filtro de qualidade de leitura e qualidade de mapeamento. Esse filtro considerou a profundidade como zero para todas as posições que não alcançavam o valor mínimo. Mesmo assim o snape-pooled conseguiu chamar esses SNPs, mas achei melhor filtrá-los.
+Mas antes disso, filtrei os SNPs que tinham profundidade de leitura igual a zero. Pode parecer estranho que o snape-pooled tenha identificado snps com profundidade de leitura igual a zero, mas isso ocorreu porque quando calculei a profundidade com o `samtools depth` usei um filtro de qualidade de leitura e qualidade de mapeamento. Esse filtro considerou a profundidade como zero para todas as posições que não alcançavam o valor mínimo de qualidade. Mesmo assim o snape-pooled conseguiu chamar esses SNPs, mas achei melhor filtrá-los.
 Também exclui os SNPs que foram chamados apenas em duas ou menos populações, e precisei aninhar cada SNP na tabela.
 
 ```{r, eval=F, echo=T}
@@ -81,17 +82,56 @@ nested_snps <- joined_pops[depth>0,][,group_nest_dt(.SD, position2)][,
                                        !c("n_pops"), with = FALSE]
 ```
 
+```{r, echo=FALSE}
+NE_table <- fread(file = "/dados/time_clines/output/SNPs/joined97.tsv",
+                  sep = "\t")
+NE_table <- NE_table[chrom == "2L",][position <= 17000,]
+
+NE_table[, position2 := paste(chrom, position, sep = ":")]
+NE_table <- NE_table[, !c("chrom", "position")]
+
+group_nest_dt <- function(dt, ..., .key = "data"){
+  stopifnot(is.data.table(dt))
+  by <- substitute(list(...))
+  dt <- dt[, list(list(.SD)), by = eval(by)]
+  setnames(dt, old = "V1", new = .key)
+  dt
+}
+
+nested_snps <- NE_table[depth>0,][,group_nest_dt(.SD, position2)][, 
+                                                                  n_pops := purrr::map_dbl(data, nrow)][
+                                                                    n_pops>2,][,
+                                                                               !c("n_pops"), with = FALSE]
+
+nested_snps <- nested_snps[1:10,]
+nested_snps
+
+```
+
+
 Corri o seguinte glm para cada SNP:
-```{r, eval=F, echo=T}
+```{r, warning = FALSE}
 #runs glm for each snp
 nested_snps[, models := purrr::map(data, ~ glm(freq~latitude, 
                                                weights = NE,
                                                data = .x,
                                                family = binomial()))]
+head(nested_snps)
+```
+
+olhando para um modelo:
+```{r}
+pluck(nested_snps[[3]]) %>% pluck(1)
+```
+
+```{r}
+nested_snps[, summary := purrr::map(models, 
+                                        ~summary(.x))]
+pluck(nested_snps[[4]]) %>% pluck(1)
 ```
 
 Então extrai o coeficiente de inclinação e o p-valor associado ao coeficiente de inclinação de cada glm:
-```{r, eval=F, echo=T}
+```{r}
 #gets lat coefficient
 nested_snps[, coefficients := purrr::map_dbl(models, ~coef(.x) %>% pluck("latitude"))]
 
@@ -99,7 +139,9 @@ nested_snps[, coefficients := purrr::map_dbl(models, ~coef(.x) %>% pluck("latitu
 nested_snps[, p_value := purrr::map_dbl(models, 
                                          ~summary(.x) %>% 
                                            pluck("coefficients") %>% pluck(8))]
+head(nested_snps, n=3)
 ```
+
 
 Nesta última parte eu estou bastante insegura em relação ao p-valor que extraí, é esse mesmo?
 Toda essa última etapa foi feita no script [glm_script.test](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/glm_script.R)
