@@ -199,8 +199,8 @@ extraí, é esse mesmo? Toda essa última etapa foi feita no script
 
 ## P-value cutoff
 
-No mesmo script de antes
-([glm\_script.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/glm_script.R)),
+Em outro script
+([FDR\_script.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/FDR_script.R)),
 calculei o p-valor para um FDR de 10% (foi um valor arbitrário para
 testar, acho que temos que pensar melhor nisso). Isso foi feito com o
 pacote [qvalue](https://github.com/StoreyLab/qvalue), criado pelos
@@ -231,5 +231,9 @@ Obtive a seguinte tabela:
     ##  9: 2L:144142  -0.11122934 0.0003831638
     ## 10: 2L:144188  -0.09107743 0.0043110069
 
-Eu só fiz esses dois últimos passos para os SNPs de 1997, porque ainda
-estava testando o script e ainda não tentei rodar ele com o Snakemake.
+O Pacote qvalue também faz o histograma dos p-valores, que para esse
+teste de 97 está
+[aqui](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/hist_97.png)
+
+Eu só fiz esse último passo para os SNPs de 1997, porque ainda estava
+testando o script e ainda não tentei rodar ele com o Snakemake.

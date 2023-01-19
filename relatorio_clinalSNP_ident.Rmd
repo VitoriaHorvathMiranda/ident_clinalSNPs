@@ -148,7 +148,7 @@ Toda essa última etapa foi feita no script [glm_script.test](https://github.com
 
 ## P-value cutoff
 
-No mesmo script de antes ([glm_script.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/glm_script.R)), calculei o p-valor para um FDR de 10% (foi um valor arbitrário para testar, acho que temos que pensar melhor nisso). Isso foi feito com o pacote [qvalue](https://github.com/StoreyLab/qvalue), criado pelos autores do paper [Storey and Tibshirani, 2003](https://www.pnas.org/doi/abs/10.1073/pnas.1530509100).
+Em outro script ([FDR_script.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/FDR_script.R)), calculei o p-valor para um FDR de 10% (foi um valor arbitrário para testar, acho que temos que pensar melhor nisso). Isso foi feito com o pacote [qvalue](https://github.com/StoreyLab/qvalue), criado pelos autores do paper [Storey and Tibshirani, 2003](https://www.pnas.org/doi/abs/10.1073/pnas.1530509100).
 
 ```{r, eval=F, echo=T}
 p_values <- nested_snps$p_value
@@ -170,5 +170,7 @@ fread(file = "snps_10q_97.tsv",
 
 ```
 
-Eu só fiz esses dois últimos passos para os SNPs de 1997, porque ainda estava testando o script e ainda não tentei rodar ele com o Snakemake.
+O Pacote qvalue também faz o histograma dos p-valores, que para esse teste de 97 está [aqui](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/hist_97.png)
+
+Eu só fiz esse último passo para os SNPs de 1997, porque ainda estava testando o script e ainda não tentei rodar ele com o Snakemake.
 
