@@ -63,7 +63,8 @@ O vcf criado ficou assim:
 ## Frequências e Número Efetivo de Cromossomos
 
 Extraí as frequências e a profundidade de leitura de cada SNP, com o
-script [freq\_extraction.R]().
+script
+[freq\_extraction.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/freq_extraction.R).
 
 <table>
 <thead>
@@ -172,10 +173,11 @@ script [freq\_extraction.R]().
 </table>
 
 Em seguida calculei o número efetivo de cromossomos com o script
-[n\_chrom.r](). Para fazer isso usei o número de cromossomos amostrado
-em cada população e a profundidade de leitura. O número de cromossomos
-amostrados em cada população estava na tabela de metadados e a
-profundidade de leitura foi extraída do vcf.
+[n\_chrom.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/n_chrom.R).
+Para fazer isso usei o número de cromossomos amostrado em cada população
+e a profundidade de leitura. O número de cromossomos amostrados em cada
+população estava na tabela de metadados e a profundidade de leitura foi
+extraída do vcf.
 
     freqs[, NE := ((1/depth) + (1/n_chrom))^-1]
 
@@ -342,7 +344,7 @@ de cada período. Usei o mesmo GLM escolhido pelo Murillo, mas talvez
 isso possa ser debatido. É um modelo com a frequência dos SNPs como
 variável preditora e a latitude como variável resposta, com função de
 ligação binomial e pesado para o número efetivo de cromossomos
-[glm\_script.R]()
+[glm\_script.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/glm_script.R)
 
     nested_snps[, models := purrr::map(data, ~ glm(freq~latitude, 
                                                    weights = NE,

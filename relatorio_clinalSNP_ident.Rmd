@@ -47,14 +47,14 @@ zcat "/dados/time_clines/data/seqs/calls/PoolSNP_mincount5_minfreq0.005_cov10.vc
 
 ## Frequências e Número Efetivo de Cromossomos
 
-Extraí as frequências e a profundidade de leitura de cada SNP, com o script [freq_extraction.R](). 
+Extraí as frequências e a profundidade de leitura de cada SNP, com o script [freq_extraction.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/freq_extraction.R). 
 
 
 ```{r, echo=FALSE}
 kable(fread("/dados/time_clines/data/seqs/calls/freqs_and_depths_mincount5_minfreq0.005_cov10.tsv", nrows = 10))
 ```
 
-Em seguida calculei o número efetivo de cromossomos com o script [n_chrom.r](). Para fazer isso usei o número de cromossomos amostrado em cada população e a profundidade de leitura. O número de cromossomos amostrados em cada população estava na tabela de metadados e a profundidade de leitura foi extraída do vcf.
+Em seguida calculei o número efetivo de cromossomos com o script [n_chrom.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/n_chrom.R). Para fazer isso usei o número de cromossomos amostrado em cada população e a profundidade de leitura. O número de cromossomos amostrados em cada população estava na tabela de metadados e a profundidade de leitura foi extraída do vcf.
 
 ```{r, eval=F, echo=T}
 freqs[, NE := ((1/depth) + (1/n_chrom))^-1]
@@ -68,7 +68,7 @@ Separei esse arquivo em outros três com base no ano em que a população foi co
 
 ## Glm
 
-Para identificar os SNPs clinais era preciso correr um GLM para cada SNP de cada período. Usei o mesmo GLM escolhido pelo Murillo, mas talvez isso possa ser debatido. É um modelo com a frequência dos SNPs como variável preditora e a latitude como variável resposta, com função de ligação binomial e pesado para o número efetivo de cromossomos [glm_script.R]()  
+Para identificar os SNPs clinais era preciso correr um GLM para cada SNP de cada período. Usei o mesmo GLM escolhido pelo Murillo, mas talvez isso possa ser debatido. É um modelo com a frequência dos SNPs como variável preditora e a latitude como variável resposta, com função de ligação binomial e pesado para o número efetivo de cromossomos [glm_script.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/glm_script.R)  
 
 ```{r, eval=F, echo=T}
 nested_snps[, models := purrr::map(data, ~ glm(freq~latitude, 
@@ -131,19 +131,22 @@ Decidi fazer um histograma dos p-valores para entender como eles estavam distrib
 SNPs_97_cov10 <- fread("/dados/time_clines/output/SNPs/p-values_97_mincount5_minfreq0.005_cov10.tsv")
 SNPs_0910_cov10 <- fread("/dados/time_clines/output/SNPs/p-values_0910_mincount5_minfreq0.005_cov10.tsv")
 
-SNPs_97_cov10 %>%
+plot1 <- SNPs_97_cov10 %>%
   ggplot() +
   geom_histogram(aes(p_value))+
   labs(x = "p-value", title = "1997",
        caption = "min-freq = 0.005, min-cov = 10, min-count = 5") +
   theme_minimal()
 
-SNPs_0910_cov10 %>%
+plot2 <- SNPs_0910_cov10 %>%
   ggplot() +
   geom_histogram(aes(p_value)) +
   labs(x = "p-value", title = "2009/2010",
        caption = "min-freq = 0.005, min-cov = 10, min-count = 5") +
   theme_minimal()
+
+plot1
+plot2
 
 ```
 
