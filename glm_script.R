@@ -8,22 +8,24 @@ library(qvalue)
 #parse arguments
 parser <- ArgumentParser(description= "computes a glm for each snp")
 parser$add_argument('--timePops', '-tPops',
-                    help = 'outputs from join_time_pops_script.R')
-parser$add_argument('--minPOP', '-minpop', default=3,
-                    help = 'Minimum number of populations in which a SNP
-                    must be present to be considered')
+                    help = 'outputs from separate_time_pops_script.R')
 parser$add_argument('--output', '-o',
                     help = 'table with inclination coefficient and 
                     p-values for each SNP, .tsv')
 
 xargs<- parser$parse_args()
 
-joined_pops <- xargs$timePops
 
-#reads data and joins chrom and position
-joined_pops <- fread(file = joined_pops)
-joined_pops[, position2 := paste(chrom, position, sep = ":")]
-joined_pops <- joined_pops[, !c("chrom", "position")]
+#reads data 
+joined_pops <- fread(file = xargs$timePops)
+
+#drops snps with no freq and with no depth covarage
+#joined_pops <- joined_pops[freq != "."][depth != 0]
+#joined_pops[, freq := as.double(freq)]
+
+#joins chrom and position
+joined_pops[, position2 := paste(CHROM, POS, sep = ":")]
+joined_pops <- joined_pops[, !c("CHROM", "POS")]
 
 #data.table function for nesting:
 group_nest_dt <- function(dt, ..., .key = "data"){
@@ -34,14 +36,10 @@ group_nest_dt <- function(dt, ..., .key = "data"){
   dt
 }
 
-#filters calls with depth = 0
+
 #nest data by snp
-#filter out snps that were only called in two or less pops
-minPop <- xargs$minPOP
-nested_snps <- joined_pops[depth>=minPop,][,group_nest_dt(.SD, position2)][, 
-                                       n_pops := purrr::map_dbl(data, nrow)][
-                                       n_pops>2,][,
-                                       !c("n_pops"), with = FALSE]
+nested_snps <- joined_pops[,group_nest_dt(.SD, position2)]
+
 #runs glm for each snp
 nested_snps[, models := purrr::map(data, ~ glm(freq~latitude, 
                                                weights = NE,

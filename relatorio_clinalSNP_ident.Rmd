@@ -1,7 +1,7 @@
 ---
 title: "Clinal SNPs Identification"
 author: "Vitória"
-date: '2023-01-16'
+date: '2023-03-03'
 output: md_document
 ---
 
@@ -9,86 +9,79 @@ output: md_document
 knitr::opts_chunk$set(echo = TRUE)
 library(data.table)
 library(tidyverse)
+library(knitr)
 ```
 
 ## SNP Calling
 
-  Os SNPs foram identificados com o [snape-pooled](https://github.com/EmanueleRaineri/snape-pooled). Esse programa considera a qualidade e a profundidade do sequenciamento e devolve a frequência das bases de todas as posições e a "probabilidade" dessa frequência estar correta. 
-  Esse arquivo foi filtrado para incluir apenas as posições cuja frequência indicada tinha "probabilidade" maior ou igual a 0.9 e para incluir apenas os cromossomos 2L, 2R, 3L, 3R e X:
+Inicialmente, os SNPs haviam sido identificados com o [snape-pooled](https://github.com/EmanueleRaineri/snape-pooled). Esse programa considera a qualidade e a profundidade do sequenciamento e devolve a frequência das bases de todas as posições e a "probabilidade" daquela posição ser realmente polimórfica. Mas havia um problema: as amostras, os pools, precisavam correr separadamente. Isso tornava muito difícil a comparação de um determinado SNP entre todas as populações, já que ele poderia estar fixado em algumas delas (e, portanto, não ser chamado nessas populações). Isso poderia ser resolvido se houvesse alguma forma de juntar os outputs deste programa e depois filtrar todas as posições que fossem polimórficas em pelo menos uma população. Mas os arquivos eram muito grandes e não havia como (pelo menos eu não consegui). 
   
+A segunda opção foi chamar os SNPs com o [PoolSNP](). Esse também é um programa especializado em chamar os SNPs de pool-seq. Mas ele aceita várias populações como input e identifica os SNPs olhando para todas as populações como um todo. É um programa bastante prático, porque possibilita que limites mínimos de profundidade e qualidade sejam estabelecidos. Esses limites valem para todas as populações, assim, temos a garantia que estamos comparando regiões que podem ser comparadas. Por exemplo, ele não consideraria SNPs que nas populações de  2009/2010 estão com boa qualidade, mas que em 1997 estão com a profundidade de leitura muito baixa. Outros parâmetros incluem o mínimo de reads que o alelo alternativo deve ter para ser considerado polimórfico e a frequência mínima que o SNP deve ter (esses dois parâmetros são calculados com base em todas as populações). Além do vcf com todos os SNPs identificados, PoolSNP também retorna um output com todas as posições que não foram chamadas porque não passaram no controle de qualidade.
+  
+O PoolSNP foi rodado com os seguintes parâmetros:
+
 ```{bash, eval=F, echo=T}
-awk '(($9>=0.9) && ($1==\"2L\" || $1==\"2R\" || $1==\"3L\" || $1==\"3R\" || $1==\"X\"))' {input} > {output}
+bash /home/vitoria/PoolSNP/PoolSNP.sh\
+    mpileup={input.mpileup}\
+    reference={input.ref}\
+    names=ESC97,CMD97B,WVT97,MFL97,RVA97,SVT09,CMD10,SNC10,JFL10,CMA97,HMA09,HMA17,MCT09,MCT17,MCT97\
+    max-cov=0.98\
+    min-cov=10\
+    min-count=5\
+    min-freq=0.005\
+    miss-frac=0.1\
+    jobs=24\
+    BS=1\
+    base-quality=20\
+    allsites=0\
+
 ```
 
-O que gerou essa tabela para cada população:
+O vcf criado ficou assim: 
+
+```{bash, echo=FALSE}
+
+zcat "/dados/time_clines/data/seqs/calls/PoolSNP_mincount5_minfreq0.005_cov10.vcf.gz" | grep -v "##" | head
+
+```
+
+## Frequências e Número Efetivo de Cromossomos
+
+Extraí as frequências e a profundidade de leitura de cada SNP, com o script [freq_extraction.R](). 
+
 
 ```{r, echo=FALSE}
-snapePool <- fread(file = "/dados/time_clines/data/seqs/calls/09_L001_filtered.pool",
-                   sep = "\t", header = FALSE, nrows = 10)
-
-snape_col_names <-  c("chrom", "position",
-                      "ref_base", "ref_count",
-                      "alt_count", "ref_qual",
-                      "alt_qual", "bases",
-                      "prob", "p(1)", "freq")
-
-setnames(snapePool, paste("V", 1:11, sep = ""), snape_col_names)
-snapePool
+kable(fread("/dados/time_clines/data/seqs/calls/freqs_and_depths_mincount5_minfreq0.005_cov10.tsv", nrows = 10))
 ```
 
-## Effective Number of Chromosomes
-
-Antes de criar os modelos para os snps clinais, calculei o número efetivo de cromossomos (NE) para cada posição da tabela anterior e para cada população. Para isso usei o [script_test.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/script_test.R) no Snakemake. 
-Para fazer isso, obtive a profundidade de leitura de cada posição com o samtools:
-
-```{bash, eval=F, echo=T}
-samtools depth -aa -q 20 -Q 30 {input} -o {output}
-```
-
-Calculei o número efetivo de cromossomos da seguinte forma:
+Em seguida calculei o número efetivo de cromossomos com o script [n_chrom.r](). Para fazer isso usei o número de cromossomos amostrado em cada população e a profundidade de leitura. O número de cromossomos amostrados em cada população estava na tabela de metadados e a profundidade de leitura foi extraída do vcf.
 
 ```{r, eval=F, echo=T}
-merged <- merge(snapePool, samtoolsDepth, by = c("chrom", "position"), all.x = TRUE)
-
-#gets chrom number
-chrom_sampled <- xargs$ChromNumber
-
-#calcula o NE 
-merged[, NE := ((1/depth) + (1/chrom_sampled))^-1]
-merged[, latitude := xargs$Latitude]
-merged[, population := xargs$PopName]
+freqs[, NE := ((1/depth) + (1/n_chrom))^-1]
 ```
-
-O número de cromossomos amostrados em cada população estava na tabela de metadados. No final desse script tive a seguinte tabela para cada população:
-
 ```{r, echo=FALSE}
-NE_table <- fread(file = "/dados/time_clines/output/SNPs/09_L001.NE.tsv",
-                   sep = "\t", nrows = 10)
-NE_table
+kable(fread("/dados/time_clines/data/seqs/align/NE_mincount5_minfreq0.005_cov10.tsv", nrows = 10))
 ```
 
-Em seguida usei o script [join_time_pops.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/join_time_pops_script.R) para juntar todas as populações de um mesmo período em uma única tabela, então no final formei três tabelas, uma com as populações de 1997, uma com as populações de 2009/2010 e uma última com as populações de 2017.
+Separei esse arquivo em outros três com base no ano em que a população foi coletada. Então no final formei três tabelas, uma com as populações de 1997, uma com as populações de 2009/2010 e uma última com as populações de 2017.
+
 
 ## Glm
 
-Para identificar os SNPs clinais era preciso correr um GLM para cada SNP de cada período. 
-Mas antes disso, filtrei os SNPs que tinham profundidade de leitura igual a zero. Pode parecer estranho que o snape-pooled tenha identificado snps com profundidade de leitura igual a zero, mas isso ocorreu porque quando calculei a profundidade com o `samtools depth` usei um filtro de qualidade de leitura e qualidade de mapeamento. Esse filtro considerou a profundidade como zero para todas as posições que não alcançavam o valor mínimo de qualidade. Mesmo assim o snape-pooled conseguiu chamar esses SNPs, mas achei melhor filtrá-los.
-Também exclui os SNPs que foram chamados apenas em duas ou menos populações, e precisei aninhar cada SNP na tabela.
+Para identificar os SNPs clinais era preciso correr um GLM para cada SNP de cada período. Usei o mesmo GLM escolhido pelo Murillo, mas talvez isso possa ser debatido. É um modelo com a frequência dos SNPs como variável preditora e a latitude como variável resposta, com função de ligação binomial e pesado para o número efetivo de cromossomos [glm_script.R]()  
 
 ```{r, eval=F, echo=T}
-nested_snps <- joined_pops[depth>0,][,group_nest_dt(.SD, position2)][, 
-                                       n_pops := purrr::map_dbl(data, nrow)][
-                                       n_pops>2,][,
-                                       !c("n_pops"), with = FALSE]
+nested_snps[, models := purrr::map(data, ~ glm(freq~latitude, 
+                                               weights = NE,
+                                               data = .x,
+                                               family = binomial()))]
 ```
 
-```{r, echo=FALSE}
-NE_table <- fread(file = "/dados/time_clines/output/SNPs/joined97.tsv",
-                  sep = "\t")
-NE_table <- NE_table[chrom == "2L",][position <= 17000,]
-
-NE_table[, position2 := paste(chrom, position, sep = ":")]
-NE_table <- NE_table[, !c("chrom", "position")]
+```{r, echo=FALSE, warning = FALSE}
+NE_table <- fread(file = "/dados/time_clines/output/SNPs/joined97_mincount5_minfreq0.005_cov10.tsv")
+NE_table <- NE_table[CHROM == "2L",]
+NE_table[, position2 := paste(CHROM, POS, sep = ":")]
+NE_table <- NE_table[, !c("CHROM", "POS")]
 
 group_nest_dt <- function(dt, ..., .key = "data"){
   stopifnot(is.data.table(dt))
@@ -98,33 +91,21 @@ group_nest_dt <- function(dt, ..., .key = "data"){
   dt
 }
 
-nested_snps <- NE_table[depth>0,][,group_nest_dt(.SD, position2)][, 
-                                                                  n_pops := purrr::map_dbl(data, nrow)][
-                                                                    n_pops>2,][,
-                                                                               !c("n_pops"), with = FALSE]
+nested_snps <- NE_table[,group_nest_dt(.SD, position2)]
 
 nested_snps <- nested_snps[1:10,]
-nested_snps
-
-```
-
-
-Corri o seguinte glm para cada SNP:
-```{r, warning = FALSE}
-#runs glm for each snp
 nested_snps[, models := purrr::map(data, ~ glm(freq~latitude, 
                                                weights = NE,
                                                data = .x,
                                                family = binomial()))]
-head(nested_snps)
+
+nested_snps
 ```
 
 olhando para um modelo:
 ```{r}
 pluck(nested_snps[[3]]) %>% pluck(1)
-```
 
-```{r}
 nested_snps[, summary := purrr::map(models, 
                                         ~summary(.x))]
 pluck(nested_snps[[4]]) %>% pluck(1)
@@ -139,38 +120,74 @@ nested_snps[, coefficients := purrr::map_dbl(models, ~coef(.x) %>% pluck("latitu
 nested_snps[, p_value := purrr::map_dbl(models, 
                                          ~summary(.x) %>% 
                                            pluck("coefficients") %>% pluck(8))]
-head(nested_snps, n=3)
+nested_snps
 ```
 
+## P-valores
 
-Nesta última parte eu estou bastante insegura em relação ao p-valor que extraí, é esse mesmo?
-Toda essa última etapa foi feita no script [glm_script.test](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/glm_script.R)
+Decidi fazer um histograma dos p-valores para entender como eles estavam distribuídos, e notei que tanto a distribuição dos SNPs de 1997 quanto as de 2009/2010, havia uma excesso de SNPs com p-valores muito altos.
+
+```{r, echo=FALSE, warning = FALSE, message = FALSE}
+SNPs_97_cov10 <- fread("/dados/time_clines/output/SNPs/p-values_97_mincount5_minfreq0.005_cov10.tsv")
+SNPs_0910_cov10 <- fread("/dados/time_clines/output/SNPs/p-values_0910_mincount5_minfreq0.005_cov10.tsv")
+
+SNPs_97_cov10 %>%
+  ggplot() +
+  geom_histogram(aes(p_value))+
+  labs(x = "p-value", title = "1997",
+       caption = "min-freq = 0.005, min-cov = 10, min-count = 5") +
+  theme_minimal()
+
+SNPs_0910_cov10 %>%
+  ggplot() +
+  geom_histogram(aes(p_value)) +
+  labs(x = "p-value", title = "2009/2010",
+       caption = "min-freq = 0.005, min-cov = 10, min-count = 5") +
+  theme_minimal()
+
+```
+
+A minha teoria para explicar esse comportamento é de que existia um excesso de SNPs raros, com baixa frequência e presentes em uma ou poucas populações, e que, quando eram testados pelo modelo, não eram nada clinais (por isso os p-valores altos). Acho que é até possível argumentar que alguns desses SNPs nem sejam SNPs verdadeiros, mas sim erros de sequenciamento. Isso porque, como são muitos SNPs, mesmo com um filtro de qualidade de base 20 (probabilidade de erro de 1 a cada 1000), não é possível de se livrar de todos os erros. Como inicialmente eu tinha chamado os SNPs com um filtro de frequência de 0.5%, resolvi chamar novamente os SNPs, mas dessa vez com um filtro de 1% de frequência. Também aumentei outros filtros, a cobertura mínima exigida passou a ser de 15 (antes era de 10) e a base alternativa deveria ser lida pelo menos 10 vezes para ser considerada. O Comando para isso ficou assim:
+
+```{bash, eval=F, echo=T}
+bash /home/vitoria/PoolSNP/PoolSNP.sh\
+    mpileup={input.mpileup}\
+    reference={input.ref}\
+    names=ESC97,CMD97B,WVT97,MFL97,RVA97,SVT09,CMD10,SNC10,JFL10,CMA97,HMA09,HMA17,MCT09,MCT17,MCT97\
+    max-cov=0.98\
+    min-cov=15\
+    min-count=10\
+    min-freq=0.01\
+    miss-frac=0.1\
+    jobs=24\
+    BS=1\
+    base-quality=20\
+    allsites=0\
+    output={params.outdir}
+```
+
+Corri todo o pipeline novamente e o número de SNPs com p-valores altos diminuiu consideravelmente:
+
+```{r, echo=FALSE, warning = FALSE, message = FALSE}
+SNPs_97_cov15 <- fread("/dados/time_clines/output/SNPs/p-values_97_mincount10_minfreq0.01_cov15.tsv")
+SNPs_0910_cov15 <- fread("/dados/time_clines/output/SNPs/p-values_0910_mincount10_minfreq0.01_cov15.tsv")
+
+SNPs_97_cov15 %>%
+  ggplot() +
+  geom_histogram(aes(p_value)) +
+  labs(x = "p-value", title = "1997",
+       caption = "min-freq = 0.01, min-cov = 15, min-count = 10") +
+  theme_minimal()
+
+SNPs_0910_cov15 %>%
+  ggplot() +
+  geom_histogram(aes(p_value))+
+  labs(x = "p-value", title = "2009/2010",
+       caption = "min-freq = 0.01, min-cov = 15, min-count = 10") +
+  theme_minimal()
+
+```
 
 ## P-value cutoff
 
-Em outro script ([FDR_script.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/FDR_script.R)), calculei o p-valor para um FDR de 10% (foi um valor arbitrário para testar, acho que temos que pensar melhor nisso). Isso foi feito com o pacote [qvalue](https://github.com/StoreyLab/qvalue), criado pelos autores do paper [Storey and Tibshirani, 2003](https://www.pnas.org/doi/abs/10.1073/pnas.1530509100).
-
-```{r, eval=F, echo=T}
-p_values <- nested_snps$p_value
-qobj <- qvalue(p = p_values)
-p_value_cutoff <- max(qobj$pvalues[qobj$qvalues <= 0.1])
-```
-
-Em seguida filtrei todos os SNPs cujo p-valor do glm era menor que o p-valor do cut-off:
-```{r,  eval=F, echo=T}
-#gets snps below that p-value
-significant_snps <- nested_snps[p_value <= p_value_cutoff,]
-
-```
-
-Obtive a seguinte tabela:
-```{r, echo=FALSE}
-fread(file = "snps_10q_97.tsv",
-      sep = "\t", nrows = 10)
-
-```
-
-O Pacote qvalue também faz o histograma dos p-valores, que para esse teste de 97 está [aqui](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/hist_97.png)
-
-Eu só fiz esse último passo para os SNPs de 1997, porque ainda estava testando o script e ainda não tentei rodar ele com o Snakemake.
-
+Existe ainda outro script ([FDR_script.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/FDR_script.R)) que escrevi para calcular o p-valor para um dado FDR. Isso foi feito com o pacote [qvalue](https://github.com/StoreyLab/qvalue), criado pelos autores do paper [Storey and Tibshirani, 2003](https://www.pnas.org/doi/abs/10.1073/pnas.1530509100). 
