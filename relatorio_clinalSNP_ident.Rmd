@@ -9,6 +9,7 @@ output: md_document
 knitr::opts_chunk$set(echo = TRUE)
 library(data.table)
 library(tidyverse)
+library(qvalue)
 library(knitr)
 ```
 
@@ -194,3 +195,121 @@ SNPs_0910_cov15 %>%
 ## P-value cutoff
 
 Existe ainda outro script ([FDR_script.R](https://github.com/VitoriaHorvathMiranda/ident_clinalSNPs/blob/main/FDR_script.R)) que escrevi para calcular o p-valor para um dado FDR. Isso foi feito com o pacote [qvalue](https://github.com/StoreyLab/qvalue), criado pelos autores do paper [Storey and Tibshirani, 2003](https://www.pnas.org/doi/abs/10.1073/pnas.1530509100). 
+
+## Manhattan Plots
+
+Eu queria ver como esses p-valores estão distribuídos no genoma. Então fiz Manhattan plots para 1997 e 2009/2010. Para fazer isso só usei os resultados dos glms que corri com a segunda chamada de SNPs (com o filtro de 1% de frequência e cobertura mínima de 15).
+
+```{r, echo=FALSE}
+SNPs_97_cov15[, c("CHROM", "POS") := tstrsplit(position2, ":", fixed = TRUE)]
+
+SNPs_97_cov15 <- SNPs_97_cov15[, .(CHROM, POS, p_value)]
+SNPs_97_cov15[, POS := as.double(POS)]
+SNPs_97_cov15[, ID := .I]
+
+axisdf <-  SNPs_97_cov15 %>% group_by(CHROM) %>% summarize(center=( max(ID) + min(ID) ) / 2 )
+
+#get FDR cutof
+Pvalue_97_cov15 <- SNPs_97_cov15$p_value
+qobj_97_cov15 <- qvalue(p = Pvalue_97_cov15)
+
+#cutoff 0.1%
+p_value_cutoff_0.1 <- max(qobj_97_cov15$pvalues[qobj_97_cov15$qvalues <= 0.1])
+
+#cutoff 0.01%
+p_value_cutoff_0.01 <- max(qobj_97_cov15$pvalues[qobj_97_cov15$qvalues <= 0.01])
+
+#cutoff 0.05%
+p_value_cutoff_0.005 <- max(qobj_97_cov15$pvalues[qobj_97_cov15$qvalues <= 0.005])
+
+#manhattan plot manual
+
+SNPs_97_cov15 %>%
+  ggplot(aes(x = ID, y =-log10(p_value))) +
+  geom_point(aes(color=as.factor(CHROM)), alpha=0.8, size=0.9) +
+  geom_line(aes(y = -log10(p_value_cutoff_0.1)), color = "green") +
+  geom_line(aes(y = -log10(p_value_cutoff_0.01)), color = "blue") +
+  geom_line(aes(y = -log10(p_value_cutoff_0.005)), color = "red") +
+  geom_text(aes(x = max(ID)+10,
+                y = -log10(p_value_cutoff_0.1) + 0.25,
+                label = "FDR 10%"),
+            size = 2.5, color = "green") +
+  geom_text(aes(x = max(ID)+10,
+                y = -log10(p_value_cutoff_0.01) + 0.25,
+                label = "FDR 1%"),
+            size = 2.5, color = "blue") +
+  geom_text(aes(x = max(ID)+10,
+                y = -log10(p_value_cutoff_0.005) + 0.25,
+                label = "FDR 0.5%"),
+            size = 2.5, color = "red") +
+  scale_color_manual(values = rep(c("lavender", "lavenderblush1"), 5)) +
+  scale_x_continuous(label = axisdf$CHROM, breaks= axisdf$center) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_bw() +
+  theme( 
+    legend.position="none",
+    panel.border = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) + 
+  labs(title = "1997", y = "-log10(p-value)")
+
+```
+
+```{r, echo=FALSE}
+SNPs_0910_cov15[, c("CHROM", "POS") := tstrsplit(position2, ":", fixed = TRUE)]
+
+SNPs_0910_cov15 <- SNPs_0910_cov15[, .(CHROM, POS, p_value)]
+SNPs_0910_cov15[, POS := as.double(POS)]
+SNPs_0910_cov15[, ID := .I]
+
+axisdf <-  SNPs_0910_cov15 %>% group_by(CHROM) %>% summarize(center=( max(ID) + min(ID) ) / 2 )
+
+#get FDR cutof
+Pvalue_0910_cov15 <- SNPs_0910_cov15$p_value
+qobj_0910_cov15 <- qvalue(p = Pvalue_0910_cov15)
+
+#cutoff 0.1%
+p_value_cutoff_0.1 <- max(qobj_0910_cov15$pvalues[qobj_0910_cov15$qvalues <= 0.1])
+
+#cutoff 0.01%
+p_value_cutoff_0.01 <- max(qobj_0910_cov15$pvalues[qobj_0910_cov15$qvalues <= 0.01])
+
+#cutoff 0.05%
+p_value_cutoff_0.005 <- max(qobj_0910_cov15$pvalues[qobj_0910_cov15$qvalues <= 0.005])
+
+#manhattan plot manual
+
+SNPs_0910_cov15 %>%
+  ggplot(aes(x = ID, y =-log10(p_value))) +
+  geom_point(aes(color=as.factor(CHROM)), alpha=0.8, size=0.9) +
+  geom_line(aes(y = -log10(p_value_cutoff_0.1)), color = "green") +
+  geom_line(aes(y = -log10(p_value_cutoff_0.01)), color = "blue") +
+  geom_line(aes(y = -log10(p_value_cutoff_0.005)), color = "red") +
+  geom_text(aes(x = max(ID)+10,
+                y = -log10(p_value_cutoff_0.1) + 0.25,
+                label = "FDR 10%"),
+            size = 2.5, color = "green") +
+  geom_text(aes(x = max(ID)+10,
+                y = -log10(p_value_cutoff_0.01) + 0.25,
+                label = "FDR 1%"),
+            size = 2.5, color = "blue") +
+  geom_text(aes(x = max(ID)+10,
+                y = -log10(p_value_cutoff_0.005) + 0.25,
+                label = "FDR 0.5%"),
+            size = 2.5, color = "red") +
+  scale_color_manual(values = rep(c("lavender", "lavenderblush1"), 5)) +
+  scale_x_continuous(label = axisdf$CHROM, breaks= axisdf$center) +
+  scale_y_continuous(expand = c(0, 0)) +
+  theme_bw() +
+  theme( 
+    legend.position="none",
+    panel.border = element_blank(),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) + 
+  labs(title = "2009/2010", y = "-log10(p-value)")
+```
+
+
+

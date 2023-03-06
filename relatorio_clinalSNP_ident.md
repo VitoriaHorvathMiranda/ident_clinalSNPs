@@ -491,3 +491,14 @@ que escrevi para calcular o p-valor para um dado FDR. Isso foi feito com
 o pacote [qvalue](https://github.com/StoreyLab/qvalue), criado pelos
 autores do paper [Storey and Tibshirani,
 2003](https://www.pnas.org/doi/abs/10.1073/pnas.1530509100).
+
+## Manhattan Plots
+
+Eu queria ver como esses p-valores estão distribuídos no genoma. Então
+fiz Manhattan plots para 1997 e 2009/2010. Para fazer isso só usei os
+resultados dos glms que corri com a segunda chamada de SNPs (com o
+filtro de 1% de frequência e cobertura mínima de 15).
+
+![](relatorio_clinalSNP_ident_files/figure-markdown_strict/unnamed-chunk-13-1.png)
+
+![](relatorio_clinalSNP_ident_files/figure-markdown_strict/unnamed-chunk-14-1.png)
