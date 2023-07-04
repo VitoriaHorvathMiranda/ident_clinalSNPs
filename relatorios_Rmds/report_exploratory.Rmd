@@ -1,0 +1,596 @@
+---
+title: "Entendendo as dados"
+author: "Vitória"
+date: '2023-03-14'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(data.table)
+library(tidyverse)
+```
+
+## Resumo dos capítulos anteriores
+
+Para identificar os SNPs clinais, corri um glm para cada SNP e extraí o coeficiente de inclinação e os p-valores. Mas, quando fiz isso com nos SNPs que foram chamados com frequência mínima de 0.5%, houve um pico de p-valores muito altos. Esse pico pode ter sido causado por um excesso de SNPs raros (com baixíssima frequência) que aparecem em algumas populações. Como todos os SNPs foram chamados juntos, se esse SNP raro estiver presente em apenas uma população, as populações do outro período terão todas as frequência igual a zero. Esse aglomerado de zeros faria com que o p-valor fosse muito alto e isso explicaria o pico de p-valores altos. Quando chamei os SNPs pedindo por uma frequência mínima de 1%, o número de SNPs com p-valores altos diminuiu consideravelmente. 
+Esse documento apresenta algumas informações que podem ajudar a entender melhor os SNPs que foram chamados em cada situação.
+
+
+## Correlação de p-valores
+
+Fiz a correlação entre os p-valores dos SNPs em 1997 e em 2009/2010 (lembrando que os mesmos SNPs foram analisados nos dois períodos). Fiz o mesmo com os coeficientes.
+
+### primeiro call
+```{r data_cov10, echo=FALSE}
+#set data
+SNPs_97_cov10 <- fread("/dados/time_clines/output/SNPs/p-values_97_mincount5_minfreq0.005_cov10.tsv")
+SNPs_0910_cov10 <- fread("/dados/time_clines/output/SNPs/p-values_0910_mincount5_minfreq0.005_cov10.tsv")
+
+new_names_97 <- c("position2", "coefficients_97", "p_value_97")
+new_names_0910 <- c("position2", "coefficients_0910", "p_value_0910")
+
+setnames(SNPs_97_cov10, names(SNPs_97_cov10), new_names_97)
+setnames(SNPs_0910_cov10, names(SNPs_0910_cov10), new_names_0910)
+
+merged_cov10 <- merge.data.table(SNPs_97_cov10, SNPs_0910_cov10)
+
+```
+```{r correlation}
+cor.test(merged_cov10$p_value_97, merged_cov10$p_value_0910, method = "pearson")
+cor.test(merged_cov10$coefficients_97, merged_cov10$coefficients_0910, method = "pearson")
+
+```
+
+Também corri uma regressão: 
+```{r regression}
+p_value_lm <- lm(p_value_97 ~ p_value_0910, data = merged_cov10)
+summary(p_value_lm)
+
+coefficient_lm <- lm(coefficients_97 ~ coefficients_0910, data = merged_cov10)
+summary(coefficient_lm)
+```
+
+Mas o interessante foi quando tentei plotar os p-valores de um período em relação ao outro período.
+
+```{r heatmap}
+ggplot(merged_cov10) +
+  geom_bin2d(aes(x = p_value_97, y = p_value_0910), binwidth = c(0.01, 0.01))
+
+```
+
+Dá para ver que, no geral, o p-valor do SNP de uma época tem pouco a dizer sobre o p-valor do mesmo SNP na outra época, com exceção dos SNPs com p-valores muito baixos ou dos SNPs com p-valores muito altos. Se eu der um zoom, fica mais caro como os p-valores altos se comportam:
+
+```{r zoomed_heatmap}
+ggplot(merged_cov10) +
+  geom_bin2d(aes(x = p_value_97, y = p_value_0910),
+             binwidth = c(0.001, 0.001)) +
+  coord_cartesian(xlim = c(0.9925, 1), ylim = c(0.9925, 1))
+```
+
+Tem muitos p-valores **muito** altos que são muito altos nos dois períodos.
+
+O mesmo gráfico para os coeficientes:
+```{r coefficient_heatmap}
+merged_cov10 %>%
+  ggplot() +
+  geom_bin2d(aes(x = coefficients_97, y = coefficients_0910))
+```
+
+### segundo call
+Até aqui tudo foi feito com base no primeiro call (com frequência mínima de 0.5%, cobertura mínima de 10). Mas eu também fiz o mesmo com o segundo call (min-freq de 1% e min-cov de 15).
+
+```{r data_cov15, echo=FALSE}
+SNPs_97_cov15 <- fread("/dados/time_clines/output/SNPs/p-values_97_mincount10_minfreq0.01_cov15.tsv")
+SNPs_0910_cov15 <- fread("/dados/time_clines/output/SNPs/p-values_0910_mincount10_minfreq0.01_cov15.tsv")
+
+new_names_97 <- c("position2", "coefficients_97", "p_value_97")
+new_names_0910 <- c("position2", "coefficients_0910", "p_value_0910")
+
+setnames(SNPs_97_cov15, names(SNPs_97_cov15), new_names_97)
+setnames(SNPs_0910_cov15, names(SNPs_0910_cov15), new_names_0910)
+
+merged_cov15 <- merge.data.table(SNPs_97_cov15, SNPs_0910_cov15)
+
+
+```
+
+```{r correlation_regression_cov15}
+cor.test(merged_cov15$p_value_97, merged_cov15$p_value_0910, method = "pearson")
+cor.test(merged_cov15$coefficients_97, merged_cov15$coefficients_0910, method = "pearson")
+
+p_value_lm <- lm(p_value_97 ~ p_value_0910,
+                 data = merged_cov15)
+summary(p_value_lm)
+
+coefficient_lm <- lm(coefficients_97 ~ coefficients_0910,
+                     data = merged_cov15)
+summary(coefficient_lm)
+
+```
+
+Parece que os p-valores baixos ainda ocorrem juntos, mas não os altos:
+```{r heatmap_cov15}
+ggplot(merged_cov15) +
+  geom_bin2d(aes(x = p_value_97, y = p_value_0910), binwidth = c(0.01, 0.01))
+```
+
+Se eu de um zoom nos p-valores altos, ainda existe a sobreposição, mas não tão alta:
+```{r zoomed_heatmat_cov15}
+ggplot(merged_cov15) +
+  geom_bin2d(aes(x = p_value_97, y = p_value_0910),
+             binwidth =  c(0.001, 0.001)) +
+  coord_cartesian(xlim = c(0.9925, 1), ylim = c(0.9925, 1))
+```
+
+Os coeficientes continuam da mesma forma:
+```{r coefficient_heatmap_cov15}
+merged_cov15 %>%
+  ggplot() +
+  geom_bin2d(aes(x = coefficients_97, y = coefficients_0910))
+```
+
+## frequência média
+
+Podemos olhar para a distribuição das médias das frequências para ver se realmente existem muitos SNPs muito raros.
+
+### primeiro call
+```{r all_mean_freq, echo=FALSE}
+all <- fread("/dados/time_clines/data/seqs/align/NE_mincount5_minfreq0.005_cov10.tsv")
+
+mean_all <- all[, mean(freq), by = c("CHROM", "POS")]
+
+ggplot(mean_all) +
+  geom_histogram(aes(x = V1), binwidth = 0.02) +
+  labs(x = "mean freq", title = "All Pops",
+       caption = "min-cov = 10, min-freq = 0.005")
+
+```
+
+Se olharmos para a distribuição da média dos períodos separadamente:
+```{r 1997_mean_freq, echo=FALSE}
+#1997
+pops_97 <- all[population %like% "97",]
+mean_pops_97 <- pops_97[, mean(freq), by = c("CHROM", "POS")]
+
+ggplot(mean_pops_97) +
+  geom_histogram(aes(x = V1), binwidth = 0.02) +
+  labs(x = "mean freq", title = "1997",
+       caption = "min-cov = 10, min-freq = 0.005")
+
+#2009/2010
+pops_0910 <- all[population %like% "09" | population %like% "10",]
+mean_pops_0910 <- pops_0910[, mean(freq), by = c("CHROM", "POS")]
+
+ggplot(mean_pops_0910) +
+  geom_histogram(aes(x = V1), binwidth = 0.02) +
+  labs(x = "mean freq", title = "2009/2010",
+       caption = "min-cov = 10, min-freq = 0.005")
+```
+
+A distribuição da frequência média considerando todas as populações e considerando apenas as populações de 2009/2010 ficou praticamente idêntica. Mas é possível ver um acúmulo de médias baixas quando olhamos só para as populações de 1997.   
+
+### segundo call
+Ao seguir os mesmos passos para a segunda chamada de SNPs, temos:
+
+```{r cov15_mean_freq, echo=FALSE}
+all_cov15 <- fread("/dados/time_clines/data/seqs/align/NE_mincount10_minfreq0.01_cov15.tsv")
+
+mean_all_cov15 <- all_cov15[, mean(freq), by = c("CHROM", "POS")]
+
+ggplot(mean_all_cov15) +
+  geom_histogram(aes(x = V1), binwidth = 0.01) +
+  labs(x = "mean freq", title = "All Pops",
+       caption = "min-cov = 15, min-freq = 0.01")
+
+#1997
+pops_97_cov15 <- all[population %like% "97",]
+mean_pops_97_cov15 <- pops_97_cov15[, mean(freq), by = c("CHROM", "POS")]
+
+ggplot(mean_pops_97_cov15) +
+  geom_histogram(aes(x = V1), binwidth = 0.01) +
+  labs(x = "mean freq", title = "1997",
+       caption = "min-cov = 15, min-freq = 0.01")
+
+#2009/2010
+pops_0910cov15 <- all_cov15[population %like% "09" | population %like% "10",]
+mean_pops_0910_cov15 <- pops_0910cov15[, mean(freq), by = c("CHROM", "POS")]
+
+ggplot(mean_pops_0910_cov15) +
+  geom_histogram(aes(x = V1), binwidth = 0.01) +
+  labs(x = "mean freq", title = "2009/2010",
+       caption = "min-cov = 10, min-freq = 0.01")
+
+```
+
+## PCA
+
+Para fazer o PCA das populações precisei excluir a população ESC97 (aquela com o sequenciamento de baixa qualidade). Isso foi necessário porque muitos SNPs não foram chamados nessa população por ela não ter passado nos filtros de qualidade, e a função que faz o PCA no R não admite NAs. Lembrando que, pelas especificações que dei para o PoolSNP, isso só poderia acontecer com uma população _ se mais de uma população não atender às exigências de qualidade, o SNP não é chamado para nenhuma população.  
+
+### primeiro call
+```{r wragle_pca_data, echo=FALSE}
+all_samples <- all[, .(population, CHROM, POS, freq)]
+all_samples[, position2 := paste(CHROM, POS, sep = ":")]
+all_samples <- all_samples[, !c("CHROM", "POS")]
+pre_pca_table <- dcast.data.table(all_samples, position2 ~ population,
+                 value.var = "freq")
+
+pre_pca_table <- pre_pca_table[,!c("ESC97")]
+
+no_NA_table <- na.omit(pre_pca_table)
+
+pca_table <- no_NA_table %>%
+  column_to_rownames(var = "position2")
+
+pca_table <- t(pca_table)
+
+pca <- prcomp(pca_table)
+
+```
+
+A variação estava relativamente bem distribuida entre os PCs:
+```{r variation_plot_pca, echo=FALSE}
+pca_var <- pca$sdev^2
+pca_var_per <- round(pca_var/sum(pca_var)*100, 1)
+
+tibble(var = pca_var_per) %>%
+  rownames_to_column() %>%
+  mutate(PCs = as.integer(rowname)) %>%
+  select(-rowname) %>%
+  ggplot(aes(x = PCs, y = var)) +
+  geom_bar(aes(), stat = "identity" ) +
+  labs(y = "var %")
+
+```
+```{r metadata, echo=FALSE, message=FALSE}
+#gets other info that we want
+seq_metadata <- read_tsv("/home/vitoria/clinas/seq_metadata.tsv")
+pop_info <- seq_metadata %>%
+  select(population, collection_year, latitude)
+
+```
+
+Parece que separa um pouco pela a latitude, mas as amostras CMD97B e MFL97 são muito diferentes das demais independente da latitude.
+```{r pca_plot, echo=FALSE}
+graph_table <- tibble(population = rownames(pca$x), 
+                  pc1 = pca$x[,1], #gets the first four PCs
+                  pc2 = pca$x[,2],
+                  pc3 = pca$x[,3],
+                  pc4 = pca$x[,4]) %>% 
+  inner_join(pop_info, by = "population") %>%  #joins tables
+  mutate(collection_year = case_when( #treats collection_year as character
+    collection_year == 1997 ~ "1997", 
+    collection_year == 2009 ~ "2009/2010", #and join 2009 and 2010
+    collection_year == 2010 ~ "2009/2010",
+    collection_year == 2017 ~ "2017"
+  ))
+
+graph_table %>%
+  ggplot(aes(x = pc1, y = pc2)) +
+  geom_point(aes(color = latitude), size = 4, alpha = 0.5) +
+  scale_color_viridis_c() +
+  geom_text(aes(label = population), size = 1.5, nudge_y = 10) +
+  xlab(paste("PC1 - ", pca_var_per[1], "%", sep = "")) +
+  ylab(paste("PC2 - ", pca_var_per[2], "%", sep = "")) +
+  theme_bw()
+
+```
+
+Se eu plotar o PC3 e o PC4:   
+```{r pc3_pc4_plot, echo=FALSE}
+graph_table %>%
+  ggplot(aes(x = pc3, y = pc4)) +
+  geom_point(aes(color = latitude), size = 4, alpha = 0.5) +
+  scale_color_viridis_c() +
+  geom_text(aes(label = population), size = 1.5, nudge_y = 10) +
+  xlab(paste("PC3 - ", pca_var_per[3], "%", sep = "")) +
+  ylab(paste("PC4 - ", pca_var_per[4], "%", sep = ""))
+
+```
+
+Como a cobertura de CMD97B também não está muito boa e já combinamos de refazer o sequenciamento resolvi refazer o PCA sem ela:
+```{r wrangle_no_CMD97B, echo=FALSE}
+no_CMD97B <- pre_pca_table[,!c("CMD97B")]
+
+no_NA_CMD97B <- na.omit(no_CMD97B)
+
+pca_table_CMD97B <- no_NA_CMD97B %>%
+  column_to_rownames(var = "position2")
+
+pca_table_CMD97B <- t(pca_table_CMD97B)
+
+pca_no_CMD97B <- prcomp(pca_table_CMD97B)
+
+```
+```{r noCMD97B_var, echo=FALSE}
+#gets the percentage of variation that each PC accounts
+pca_no_CMD97B_var <- pca_no_CMD97B$sdev^2
+pca_no_CMD97B_var_per <- round(pca_no_CMD97B_var/sum(pca_no_CMD97B_var)*100, 1)
+
+#plots that variation
+tibble(var = pca_no_CMD97B_var_per) %>%
+  rownames_to_column() %>%
+  mutate(rowname = as.integer(rowname)) %>%
+  ggplot(aes(x = rowname, y = var)) +
+  geom_bar(aes(), stat = "identity" ) +
+  labs(y = "var %", x = "PCs")
+
+```
+```{r noCMD97B_PCA, echo=FALSE}
+#joins all info in a single table
+graph_table_noCMD97B <- tibble(population = rownames(pca_no_CMD97B$x), 
+                      pc1 = pca_no_CMD97B$x[,1], #gets the first two PCs
+                      pc2 = pca_no_CMD97B$x[,2],
+                      pc3 = pca_no_CMD97B$x[,3],
+                      pc4 = pca_no_CMD97B$x[,4]) %>%
+  mutate(population = str_replace(population, "_freq", "")) %>%
+  inner_join(pop_info, by = "population") %>% #joins tables
+  mutate(collection_year = case_when( #treats collection_year as character
+    collection_year == 1997 ~ "1997", 
+    collection_year == 2009 ~ "2009/2010", #and join 2009 and 2010
+    collection_year == 2010 ~ "2009/2010",
+    collection_year == 2017 ~ "2017"
+  ))
+
+
+#plot colored by latitude
+graph_table_noCMD97B %>%
+  ggplot(aes(x = pc1, y = pc2)) +
+  geom_point(aes(color = latitude), size = 4, alpha = 0.5) +
+  scale_color_viridis_c() +
+  geom_text(aes(label = population), size = 1.5, nudge_y = 10) +
+  xlab(paste("PC1 - ", pca_no_CMD97B_var_per[1], "%", sep = "")) +
+  ylab(paste("PC2 - ", pca_no_CMD97B_var_per[2], "%", sep = ""))
+
+```
+
+Também fiz o PCA das populações de 1997 e de 2009/2010 separadamente:
+```{r PCA97, echo=FALSE}
+pre_pca_table97 <- pre_pca_table[, !(names(pre_pca_table) %like% "09" | names(pre_pca_table) %like% "10" | names(pre_pca_table) %like% "17"),
+                                 with = FALSE]
+
+no_NA_table97 <- na.omit(pre_pca_table97)
+
+pca_table97 <- no_NA_table97 %>%
+  column_to_rownames(var = "position2")
+
+pca_table97 <- t(pca_table97)
+
+pca97 <- prcomp(pca_table97)
+
+#gets the percentage of variation that each PC accounts
+pca_var97 <- pca97$sdev^2
+pca_var_per97 <- round(pca_var97/sum(pca_var97)*100, 1)
+
+#plots that variation
+tibble(var = pca_var_per97) %>%
+  rownames_to_column() %>%
+  mutate(PCs = as.integer(rowname)) %>%
+  select(-rowname) %>%
+  ggplot(aes(x = PCs, y = var)) +
+  geom_bar(aes(), stat = "identity") +
+  labs(y = "var %", x = "PCs", title = "1997")
+
+#joins all info in a single table
+graph_table97 <- tibble(population = rownames(pca97$x), 
+                      pc1 = pca97$x[,1], #gets the first four PCs
+                      pc2 = pca97$x[,2],
+                      pc3 = pca97$x[,3],
+                      pc4 = pca97$x[,4]) %>% 
+  inner_join(pop_info, by = "population") %>%  #joins tables
+  mutate(collection_year = as.character(collection_year))
+
+
+#plot colored by latitude
+graph_table97 %>%
+  ggplot(aes(x = pc1, y = pc2)) +
+  geom_point(aes(color = latitude), size = 4, alpha = 0.5) +
+  scale_color_viridis_c() +
+  geom_text(aes(label = population), size = 1.5, nudge_y = 10) +
+  xlab(paste("PC1 - ", pca_var_per97[1], "%", sep = "")) +
+  ylab(paste("PC2 - ", pca_var_per97[2], "%", sep = "")) +
+  theme_bw()
+
+```
+```{r PCA0910, echo=FALSE}
+pre_pca_table0910 <- pre_pca_table[, !(names(pre_pca_table) %like% "97" | names(pre_pca_table) %like% "17"),
+                                 with = FALSE]
+
+no_NA_table0910 <- na.omit(pre_pca_table0910)
+
+pca_table0910 <- no_NA_table0910 %>%
+  column_to_rownames(var = "position2")
+
+pca_table0910 <- t(pca_table0910)
+
+pca0910 <- prcomp(pca_table0910)
+
+#gets the percentage of variation that each PC accounts
+pca_var0910 <- pca0910$sdev^2
+pca_var_per0910 <- round(pca_var0910/sum(pca_var0910)*100, 1)
+
+#plots that variation
+tibble(var = pca_var_per0910) %>%
+  rownames_to_column() %>%
+  mutate(PCs = as.integer(rowname)) %>%
+  select(-rowname) %>%
+  ggplot(aes(x = PCs, y = var)) +
+  geom_bar(aes(), stat = "identity") +
+  labs(y = "var %", x = "PCs", title = "2009/2010")
+
+#joins all info in a single table
+graph_table0910 <- tibble(population = rownames(pca0910$x), 
+                        pc1 = pca0910$x[,1], #gets the first four PCs
+                        pc2 = pca0910$x[,2],
+                        pc3 = pca0910$x[,3],
+                        pc4 = pca0910$x[,4]) %>% 
+  inner_join(pop_info, by = "population") %>%  #joins tables
+  mutate(collection_year = as.character(collection_year))
+
+
+#plot colored by latitude
+graph_table0910 %>%
+  ggplot(aes(x = pc1, y = pc2)) +
+  geom_point(aes(color = latitude), size = 4, alpha = 0.5) +
+  scale_color_viridis_c() +
+  geom_text(aes(label = population), size = 1.5, nudge_y = 10) +
+  xlab(paste("PC1 - ", pca_var_per0910[1], "%", sep = "")) +
+  ylab(paste("PC2 - ", pca_var_per0910[2], "%", sep = "")) +
+  theme_bw()
+
+```
+
+### segundo call
+
+```{r PCA_cov15, echo=FALSE}
+all_samples <- all_cov15[, .(population, CHROM, POS, freq)]
+all_samples[, position2 := paste(CHROM, POS, sep = ":")]
+all_samples <- all_samples[, !c("CHROM", "POS")]
+
+pre_pca_table <- dcast.data.table(all_samples, position2 ~ population,
+                 value.var = "freq")
+no_NA_table <- na.omit(pre_pca_table)
+
+pca_table <- no_NA_table %>%
+  column_to_rownames(var = "position2")
+
+pca_table <- t(pca_table)
+
+pca <- prcomp(pca_table)
+
+#gets the percentage of variation that each PC accounts
+pca_var <- pca$sdev^2
+pca_var_per <- round(pca_var/sum(pca_var)*100, 1)
+
+#plots that variation
+tibble(var = pca_var_per) %>%
+  rownames_to_column() %>%
+  mutate(PCs = as.integer(rowname)) %>%
+  select(-rowname) %>%
+  ggplot(aes(x = PCs, y = var)) +
+  geom_bar(aes(), stat = "identity" ) +
+  labs(x = "PCs", y = "var %")
+
+#joins all info in a single table
+graph_table <- tibble(population = rownames(pca$x), 
+                  pc1 = pca$x[,1], #gets the first four PCs
+                  pc2 = pca$x[,2],
+                  pc3 = pca$x[,3],
+                  pc4 = pca$x[,4]) %>% 
+  inner_join(pop_info, by = "population") %>%  #joins tables
+  mutate(collection_year = case_when( #treats collection_year as character
+    collection_year == 1997 ~ "1997", 
+    collection_year == 2009 ~ "2009/2010", #and join 2009 and 2010
+    collection_year == 2010 ~ "2009/2010",
+    collection_year == 2017 ~ "2017"
+  ))
+
+#plot colored by latitude
+graph_table %>%
+  ggplot(aes(x = pc1, y = pc2)) +
+  geom_point(aes(color = latitude), size = 4, alpha = 0.5) +
+  scale_color_viridis_c() +
+  geom_text(aes(label = population), size = 1.5, nudge_y = 10) +
+  xlab(paste("PC1 - ", pca_var_per[1], "%", sep = "")) +
+  ylab(paste("PC2 - ", pca_var_per[2], "%", sep = "")) +
+  theme_bw()
+
+```
+```{r PCA_cov15_97, echo=FALSE}
+pre_pca_table97 <- pre_pca_table[, !(names(pre_pca_table) %like% "09" | names(pre_pca_table) %like% "10" | names(pre_pca_table) %like% "17"),
+                                 with = FALSE]
+
+no_NA_table97 <- na.omit(pre_pca_table97)
+
+pca_table97 <- no_NA_table97 %>%
+  column_to_rownames(var = "position2")
+
+pca_table97 <- t(pca_table97)
+
+pca97 <- prcomp(pca_table97)
+
+#gets the percentage of variation that each PC accounts
+pca_var97 <- pca97$sdev^2
+pca_var_per97 <- round(pca_var97/sum(pca_var97)*100, 1)
+
+#plots that variation
+tibble(var = pca_var_per97) %>%
+  rownames_to_column() %>%
+  mutate(PCs = as.integer(rowname)) %>%
+  select(-rowname) %>%
+  ggplot(aes(x = PCs, y = var)) +
+  geom_bar(aes(), stat = "identity") +
+  labs(y = "var %", x = "PCs", title = "1997")
+
+#joins all info in a single table
+graph_table97 <- tibble(population = rownames(pca97$x), 
+                      pc1 = pca97$x[,1], #gets the first four PCs
+                      pc2 = pca97$x[,2],
+                      pc3 = pca97$x[,3],
+                      pc4 = pca97$x[,4]) %>% 
+  inner_join(pop_info, by = "population") %>%  #joins tables
+  mutate(collection_year = as.character(collection_year))
+
+
+#plot colored by latitude
+graph_table97 %>%
+  ggplot(aes(x = pc1, y = pc2)) +
+  geom_point(aes(color = latitude), size = 4, alpha = 0.5) +
+  scale_color_viridis_c() +
+  geom_text(aes(label = population), size = 1.5, nudge_y = 10) +
+  xlab(paste("PC1 - ", pca_var_per97[1], "%", sep = "")) +
+  ylab(paste("PC2 - ", pca_var_per97[2], "%", sep = "")) +
+  theme_bw()
+
+
+```
+```{r PCA_cov15_0910, echo=FALSE}
+pre_pca_table0910 <- pre_pca_table[, !(names(pre_pca_table) %like% "97" | names(pre_pca_table) %like% "17"),
+                                 with = FALSE]
+
+no_NA_table0910 <- na.omit(pre_pca_table0910)
+
+pca_table0910 <- no_NA_table0910 %>%
+  column_to_rownames(var = "position2")
+
+pca_table0910 <- t(pca_table0910)
+
+pca0910 <- prcomp(pca_table0910)
+
+#gets the percentage of variation that each PC accounts
+pca_var0910 <- pca0910$sdev^2
+pca_var_per0910 <- round(pca_var0910/sum(pca_var0910)*100, 1)
+
+#plots that variation
+tibble(var = pca_var_per0910) %>%
+  rownames_to_column() %>%
+  mutate(PCs = as.integer(rowname)) %>%
+  select(-rowname) %>%
+  ggplot(aes(x = PCs, y = var)) +
+  geom_bar(aes(), stat = "identity") +
+  labs(y = "var %", x = "PCs", title = "2009/2010")
+
+#joins all info in a single table
+graph_table0910 <- tibble(population = rownames(pca0910$x), 
+                        pc1 = pca0910$x[,1], #gets the first four PCs
+                        pc2 = pca0910$x[,2],
+                        pc3 = pca0910$x[,3],
+                        pc4 = pca0910$x[,4]) %>% 
+  inner_join(pop_info, by = "population") %>%  #joins tables
+  mutate(collection_year = as.character(collection_year))
+
+
+#plot colored by latitude
+graph_table0910 %>%
+  ggplot(aes(x = pc1, y = pc2)) +
+  geom_point(aes(color = latitude), size = 4, alpha = 0.5) +
+  scale_color_viridis_c() +
+  geom_text(aes(label = population), size = 1.5, nudge_y = 10) +
+  xlab(paste("PC1 - ", pca_var_per0910[1], "%", sep = "")) +
+  ylab(paste("PC2 - ", pca_var_per0910[2], "%", sep = "")) +
+  theme_bw()
+
+```
+
+
+
